@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Eagleview Imagery Explorer Prototype</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121934;
+      --panel-2:#172042;
+      --text:#e8ecf7;
+      --muted:#aab4d1;
+      --accent:#5aa9ff;
+      --accent-2:#7c5cff;
+      --good:#1fbf75;
+      --warn:#f2b94b;
+      --bad:#ef5b5b;
+      --border:#28345f;
+      --shadow:0 10px 30px rgba(0,0,0,.25);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 430px 1fr;
+      gap: 16px;
+      padding: 16px;
+      flex: 1;
+    }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .left-panel {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 78vh;
+      max-height: calc(100vh - 32px);
+    }
+
+    .left-scroll { overflow: auto; }
+
+    .section {
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 10px 0;
+      line-height: 1.2;
+    }
+
+    h1 { font-size: 1.35rem; }
+    h2 { font-size: 1rem; }
+    h3 { font-size: .95rem; }
+
+    p, label, .small, td, th, input, select, button, textarea, summary {
+      font-size: .92rem;
+    }
+
+    .small {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .grid-1 { display: grid; gap: 10px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      outline: none;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      height: 32px;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .range-value {
+      min-width: 70px;
+      text-align: right;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 14px;
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-color: transparent;
+      color: white;
+    }
+
+    button.success {
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      border-color: transparent;
+      color: white;
+    }
+
+    button.warn {
+      background: linear-gradient(135deg, #d97706, #f59e0b);
+      border-color: transparent;
+      color: white;
+    }
+
+    button.secondary {
+      background: rgba(255,255,255,.05);
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .pinned-action-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 5;
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(18,25,52,.88), rgba(23,32,66,.98));
+      backdrop-filter: blur(8px);
+    }
+
+    .pinned-action-bar button { width: 100%; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      padding: 8px 10px;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .dot.good { background: var(--good); }
+    .dot.bad { background: var(--bad); }
+
+    .accordion {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .accordion summary {
+      list-style: none;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .accordion summary::-webkit-details-marker { display: none; }
+
+    .accordion summary::after {
+      content: "▾";
+      color: var(--muted);
+      transition: transform .2s ease;
+    }
+
+    .accordion[open] summary::after {
+      transform: rotate(180deg);
+    }
+
+    .accordion-body {
+      padding: 0 18px 18px;
+    }
+
+    .main-panel {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 78vh;
+    }
+
+    .tabs-wrap {
+      padding: 14px 16px 18px;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .tab-btn {
+      border-radius: 999px;
+      padding: 9px 14px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      border-color: transparent;
+    }
+
+    .tab-panel {
+      display: none;
+      margin-top: 14px;
+    }
+
+    .tab-panel.active { display: block; }
+
+    #map {
+      width: 100%;
+      height: 70vh;
+      min-height: 500px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .map-toolbar-grid {
+      display: grid;
+      grid-template-columns: auto auto auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width: 1000px) {
+      .map-toolbar-grid { grid-template-columns: 1fr; }
+    }
+
+    .toggle-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      min-height: 44px;
+    }
+
+    .toggle-wrap input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 6px 10px;
+      margin-top: 10px;
+      font-size: .86rem;
+    }
+
+    .kv div:nth-child(odd) {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      word-break: break-all;
+    }
+
+    .status-box {
+      margin-top: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.02);
+    }
+
+    .warning-box {
+      margin-top: 12px;
+      border: 1px solid color-mix(in srgb, var(--warn) 60%, var(--border));
+      border-left: 4px solid var(--warn);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--warn) 12%, transparent);
+      color: var(--text);
+      display: none;
+    }
+
+    .map-warning-badge {
+      display: none;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(185, 28, 28, .92);
+      color: #fff;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,.18);
+    }
+
+    .callout, .info-box {
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .info-box {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: rgba(90,169,255,.08);
+      color: var(--text);
+      margin-top: 12px;
+    }
+
+    .pagination-bar {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    .pagination-meta {
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(0,0,0,.18);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 12px;
+      color: #cce3ff;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th { color: var(--muted); }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .preview-image {
+      width: 100%;
+      max-height: 520px;
+      object-fit: contain;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(0,0,0,.12);
+      display: none;
+    }
+
+    .preview-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .preview-title-badge {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      font-weight: 700;
+      font-size: .9rem;
+    }
+
+    .footer-note {
+      padding: 10px 16px 18px;
+      color: var(--muted);
+      font-size: .8rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(90,169,255,.12);
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 700;
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+
+    .response-prop-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .response-prop-label input {
+      width: auto;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel left-panel">
+      <div class="section">
+        <h1>Eagleview Imagery Explorer</h1>
+        <p class="small">
+          Discovery finds images and metadata, Images retrieves image content, and WMTS provides ortho map tiles [1][2].
+        </p>
+        <div class="badge">
+          <span class="dot bad" id="tokenDot"></span>
+          <span id="tokenState">No token</span>
+        </div>
+      </div>
+
+      <div class="left-scroll">
+        <details class="accordion" id="authAccordion" open>
+          <summary>1) Authentication</summary>
+          <div class="accordion-body">
+            <div class="grid-1">
+              <div>
+                <label for="clientId">Client ID</label>
+                <input id="clientId" type="text" placeholder="Enter client ID" />
+              </div>
+              <div>
+                <label for="clientSecret">Client Secret</label>
+                <input id="clientSecret" type="password" placeholder="Enter client secret" />
+              </div>
+              <div class="grid-2">
+                <div>
+                  <label for="environment">Environment</label>
+                  <select id="environment">
+                    <option value="production">Production</option>
+                    <option value="sandbox">Sandbox</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="strictMode">Validation mode</label>
+                  <select id="strictMode">
+                    <option value="strict" selected>application/json+strict</option>
+                    <option value="json">application/json</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label for="imageFormat">Image format</label>
+                <select id="imageFormat">
+                  <option value="IMAGE_FORMAT_JPEG" selected>IMAGE_FORMAT_JPEG</option>
+                  <option value="IMAGE_FORMAT_PNG">IMAGE_FORMAT_PNG</option>
+                </select>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="primary" id="getTokenBtn">Get Access Token</button>
+              <button id="clearTokenBtn">Clear Token</button>
+            </div>
+            <div class="status-box" id="authStatus">
+              Enter credentials and request a token from the Eagleview OAuth endpoint.
+            </div>
+          </div>
+        </details>
+
+        <details class="accordion" open>
+          <summary>2) Search Inputs</summary>
+          <div class="accordion-body">
+            <div class="grid-1">
+              <div>
+                <label for="searchText">Find place or address</label>
+                <input id="searchText" type="text" placeholder="e.g. 1600 Amphitheatre Pkwy, Mountain View, CA" />
+              </div>
+              <div class="grid-2">
+                <div>
+                  <label for="latInput">Latitude</label>
+                  <input id="latInput" type="number" step="any" placeholder="41.25056" />
+                </div>
+                <div>
+                  <label for="lngInput">Longitude</label>
+                  <input id="lngInput" type="number" step="any" placeholder="-95.98608" />
+                </div>
+              </div>
+              <div>
+                <label for="radiusInput">Radius: <span id="radiusValue">75</span> meters</label>
+                <div class="range-row">
+                  <input id="radiusInput" type="range" min="1" max="75" step="1" value="75" />
+                  <div class="range-value" id="radiusValueSide">75 m</div>
+                </div>
+              </div>
+              <div class="grid-2">
+                <div>
+                  <label for="startDateInput">Start date</label>
+                  <input id="startDateInput" type="date" />
+                </div>
+                <div>
+                  <label for="endDateInput">End date</label>
+                  <input id="endDateInput" type="date" />
+                </div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button id="geocodeBtn">Search Map</button>
+              <button id="usePinBtn">Use Point</button>
+              <button id="clearSearchFiltersBtn">Clear Search Filters</button>
+              <button class="warn" id="clearShapesBtn">Clear Shapes</button>
+            </div>
+            <div class="info-box">
+              Polygon geometry can be sent as GeoJSON or WKT with `EPSG:4326`, and center requests use a point plus radius in meters [1].
+            </div>
+          </div>
+        </details>
+
+        <details class="accordion" open>
+          <summary>3) Selected Geometry</summary>
+          <div class="accordion-body">
+            <div class="grid-1">
+              <div>
+                <label for="geometryType">Geometry type</label>
+                <input id="geometryType" type="text" value="None" readonly />
+              </div>
+              <div>
+                <label for="fetchModePreview">Fetch mode</label>
+                <input id="fetchModePreview" type="text" value="None" readonly />
+              </div>
+              <div>
+                <label for="geometryPreview">Geometry preview</label>
+                <textarea id="geometryPreview" rows="8" readonly></textarea>
+              </div>
+            </div>
+            <div class="warning-box" id="areaWarning"></div>
+            <div class="status-box" id="queryStatus">Ready to search.</div>
+          </div>
+        </details>
+
+        <details class="accordion" id="responsePropsAccordion">
+          <summary>4) Response Properties</summary>
+          <div class="accordion-body">
+            <div class="grid-1">
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="capture_dates" checked /> Capture dates (display only)</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="capture_labels" /> Capture labels (display only)</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="first_published_time" checked /> First published time</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="composite" checked /> Composite</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="shot_time" checked /> Shot time</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="calculated_gsd" checked /> Calculated GSD</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="zoom_range" checked /> Zoom range</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="ground_footprint" /> Ground footprint</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="look_at" /> Look-at</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="tilebox" /> Tilebox (display only)</label>
+              <label class="response-prop-label"><input type="checkbox" class="response-prop-toggle" value="estimated_requested_location" /> Estimated requested location (display only)</label>
+            </div>
+
+            <div class="grid-1" style="margin-top:12px;">
+              <div>
+                <label for="gsdDisplayUnit">GSD display unit</label>
+                <select id="gsdDisplayUnit">
+                  <option value="meters" selected>Meters</option>
+                  <option value="inches">Inches</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="btn-row">
+              <button id="clearResponsePropsBtn">Clear Response Props</button>
+              <button class="warn" id="resetAllBtn">Reset All</button>
+            </div>
+            <div class="info-box" style="margin-top:12px;">
+              Display-only fields are shown in the normalized table when available, but are not sent in `response_props`. Only requestable response properties are included in the request [1].
+            </div>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>5) API Request Preview</summary>
+          <div class="accordion-body">
+            <details open>
+              <summary>Headers & URL</summary>
+              <pre id="requestPreview">No request yet.</pre>
+            </details>
+            <details style="margin-top:10px;">
+              <summary>Raw Response</summary>
+              <pre id="responsePreview">No response yet.</pre>
+            </details>
+          </div>
+        </details>
+      </div>
+
+      <div class="pinned-action-bar">
+        <button class="success" id="discoverBtn">Find Available Images</button>
+      </div>
+    </aside>
+
+    <main class="panel main-panel">
+      <div class="tabs-wrap">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+          <div>
+            <h2 style="margin-bottom:4px;">Workspace</h2>
+            <div class="small">Map, results, table, and preview are organized into tabs.</div>
+          </div>
+          <span class="pill" id="resultCountPill">0 results</span>
+        </div>
+
+        <div class="callout">
+          Discovery can return captures and image metadata, and the response contains one or more captures for the requested location [1].
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab-btn active" data-tab="map">Map</button>
+          <button class="tab-btn" data-tab="cards">Cards</button>
+          <button class="tab-btn" data-tab="table">Normalized Table</button>
+          <button class="tab-btn" data-tab="preview">Image Preview</button>
+        </div>
+
+        <div id="tab-map" class="tab-panel active">
+          <div class="map-toolbar-grid">
+            <button id="quickSearchBtn">Search</button>
+            <button id="fitGeometryBtn">Fit to Selection</button>
+            <button id="demoDataBtn">Load Sample Result</button>
+            <input id="quickSearch" type="text" placeholder="Search a place and press Enter" />
+            <label class="toggle-wrap" for="wmtsToggle">
+              <input id="wmtsToggle" type="checkbox" disabled />
+              <span>Show WMTS Latest</span>
+            </label>
+          </div>
+
+          <div id="mapAreaWarningBadge" class="map-warning-badge"></div>
+
+          <div class="status-box" id="wmtsStatus" style="margin-top:0; margin-bottom:12px;">
+            Authenticate to enable the WMTS Latest layer toggle.
+          </div>
+
+          <div id="map"></div>
+        </div>
+
+        <div id="tab-cards" class="tab-panel">
+          <div id="results" class="cards"></div>
+        </div>
+
+        <div id="tab-table" class="tab-panel">
+          <div id="resultTableWrap" style="display:none;">
+            <h3>Normalized result table</h3>
+            <table>
+              <thead>
+                <tr id="resultTableHeadRow"></tr>
+              </thead>
+              <tbody id="resultTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-preview" class="tab-panel">
+          <div id="imagePreviewWrap" class="preview-grid" style="display:none;">
+            <div class="preview-heading">
+              <h3 id="previewTitle">No preview yet</h3>
+              <span class="preview-title-badge" id="previewTitleBadge">—</span>
+            </div>
+            <div class="card">
+              <div class="kv">
+                <div>Image URN</div><div class="mono" id="previewUrn">—</div>
+                <div>View Type</div><div id="previewViewType">—</div>
+                <div>Direction</div><div id="previewDirection">—</div>
+                <div>Fetch mode</div><div id="previewMode">—</div>
+                <div>Request URL</div><div class="mono" id="previewUrl">—</div>
+              </div>
+              <div style="margin-top:12px;">
+                <img id="imagePreview" class="preview-image" alt="Fetched imagery preview" />
+              </div>
+            </div>
+          </div>
+          <div id="previewEmptyState" class="card">
+            <h3>No preview yet</h3>
+            <div class="small">Use “Fetch Image at Location” on any returned URN to load an image preview here.</div>
+          </div>
+        </div>
+
+        <div class="pagination-bar">
+          <div class="pagination-meta" id="paginationMeta">No additional pages loaded yet.</div>
+          <button id="nextPageBtn" class="primary" style="display:none;">Next Page</button>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        Sample fallback data is included for preview/testing when live responses are unavailable.
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script>
+    const MAX_AREA_WARNING_M2 = 25000;
+
+    const state = {
+      token: null,
+      tokenType: 'Bearer',
+      tokenExpiresAt: 0,
+      selectedPoint: null,
+      selectedPolygon: null,
+      marker: null,
+      currentResults: [],
+      previewObjectUrl: null,
+      polygonAreaM2: null,
+      wmtsLayer: null,
+      wmtsMeta: null,
+      nextCaptureToken: null,
+      pageCount: 1
+    };
+
+    const tokenEndpoint = 'https://apicenter.eagleview.com/oauth2/v1/token';
+
+    const REQUESTABLE_RESPONSE_PROPS = new Set([
+      'first_published_time',
+      'composite',
+      'shot_time',
+      'calculated_gsd',
+      'zoom_range',
+      'ground_footprint',
+      'look_at'
+    ]);
+
+    const DEFAULT_RESPONSE_PROPS = [
+      'capture_dates',
+      'first_published_time',
+      'composite',
+      'shot_time',
+      'calculated_gsd',
+      'zoom_range'
+    ];
+
+    const responsePropColumnMap = {
+      capture_dates: [
+        { key: 'captureStartDate', label: 'Capture Start' },
+        { key: 'captureEndDate', label: 'Capture End' }
+      ],
+      capture_labels: [
+        { key: 'captureLabels', label: 'Labels' }
+      ],
+      first_published_time: [
+        { key: 'firstPublishedTime', label: 'First Published' }
+      ],
+      composite: [
+        { key: 'composite', label: 'Composite' }
+      ],
+      shot_time: [
+        { key: 'shotTime', label: 'Shot Time' }
+      ],
+      calculated_gsd: [
+        { key: 'gsdDisplay', label: 'GSD' }
+      ],
+      zoom_range: [
+        { key: 'zoomRange', label: 'Zoom Range' }
+      ],
+      ground_footprint: [
+        { key: 'groundFootprint', label: 'Ground Footprint' }
+      ],
+      look_at: [
+        { key: 'lookAtAzimuth', label: 'Azimuth' },
+        { key: 'lookAtElevation', label: 'Elevation' }
+      ],
+      tilebox: [
+        { key: 'tilebox', label: 'Tilebox' }
+      ],
+      estimated_requested_location: [
+        { key: 'estimatedRequestedLocation', label: 'Estimated Requested Location' }
+      ]
+    };
+
+    const el = (id) => document.getElementById(id);
+
+    const authStatus = el('authStatus');
+    const queryStatus = el('queryStatus');
+    const requestPreview = el('requestPreview');
+    const responsePreview = el('responsePreview');
+    const geometryType = el('geometryType');
+    const geometryPreview = el('geometryPreview');
+    const fetchModePreview = el('fetchModePreview');
+    const areaWarning = el('areaWarning');
+    const mapAreaWarningBadge = el('mapAreaWarningBadge');
+    const tokenDot = el('tokenDot');
+    const tokenState = el('tokenState');
+    const resultCountPill = el('resultCountPill');
+    const resultsEl = el('results');
+    const resultTableWrap = el('resultTableWrap');
+    const resultTableBody = el('resultTableBody');
+    const authAccordion = el('authAccordion');
+    const radiusInput = el('radiusInput');
+    const radiusValue = el('radiusValue');
+    const radiusValueSide = el('radiusValueSide');
+    const wmtsToggle = el('wmtsToggle');
+    const wmtsStatus = el('wmtsStatus');
+    const nextPageBtn = el('nextPageBtn');
+    const paginationMeta = el('paginationMeta');
+    const gsdDisplayUnit = el('gsdDisplayUnit');
+
+    function formatDirection(direction) {
+      if (!direction) return '';
+      return direction.charAt(0).toUpperCase() + direction.slice(1);
+    }
+
+    function formatImageTitle(item) {
+      if (item.type === 'oblique' && item.direction) {
+        return `Oblique: ${formatDirection(item.direction)}`;
+      }
+      if (item.type === 'ortho') {
+        return 'Ortho';
+      }
+      if (item.type) {
+        return item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      }
+      return 'Image';
+    }
+
+    function formatGsd(gsdRaw) {
+      if (!gsdRaw || gsdRaw.value == null) return '—';
+
+      const mode = gsdDisplayUnit?.value || 'meters';
+      const meters = Number(gsdRaw.value);
+
+      if (mode === 'inches') {
+        return `${(meters * 39.37007874).toFixed(3)} in`;
+      }
+
+      return `${meters} ${gsdRaw.units || 'UNITS_METERS'}`;
+    }
+
+    function updatePaginationControls() {
+      if (state.nextCaptureToken) {
+        nextPageBtn.style.display = 'inline-block';
+        nextPageBtn.disabled = false;
+        paginationMeta.textContent = `Page ${state.pageCount}. More captures are available.`;
+      } else {
+        nextPageBtn.style.display = 'none';
+        paginationMeta.textContent = `Page ${state.pageCount}. No more capture pages available.`;
+      }
+    }
+
+    function getSelectedResponseProps() {
+      return Array.from(document.querySelectorAll('.response-prop-toggle:checked'))
+        .map(elm => elm.value);
+    }
+
+    function buildResponsePropsRequest() {
+      const selected = getSelectedResponseProps()
+        .filter(prop => REQUESTABLE_RESPONSE_PROPS.has(prop));
+
+      if (!selected.length) return null;
+
+      const responseProps = {};
+      selected.forEach(prop => {
+        responseProps[prop] = true;
+      });
+      return responseProps;
+    }
+
+    function getDynamicColumns() {
+      const baseColumns = [
+        { key: 'idx', label: '#' },
+        { key: 'typeTitle', label: 'Type' },
+        { key: 'urn', label: 'URN' },
+        { key: 'date', label: 'Date' },
+        { key: 'directionDisplay', label: 'Direction' },
+        { key: 'captureUrn', label: 'Capture URN' }
+      ];
+
+      const selected = getSelectedResponseProps();
+      const dynamicColumns = [];
+
+      selected.forEach(prop => {
+        if (responsePropColumnMap[prop]) {
+          dynamicColumns.push(...responsePropColumnMap[prop]);
+        }
+      });
+
+      return [...baseColumns, ...dynamicColumns];
+    }
+
+    function renderDynamicTableHeader() {
+      const headRow = document.getElementById('resultTableHeadRow');
+      const columns = getDynamicColumns();
+      headRow.innerHTML = columns.map(col => `<th>${escapeHtml(col.label)}</th>`).join('');
+    }
+
+    function renderDynamicTableRows(rows) {
+      const columns = getDynamicColumns();
+      resultTableBody.innerHTML = '';
+
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = columns.map(col => {
+          let value = row[col.key] ?? '—';
+
+          if (col.key === 'gsdDisplay') {
+            value = formatGsd(row.gsdRaw);
+          }
+
+          const isMono = ['urn', 'captureUrn', 'groundFootprint', 'estimatedRequestedLocation', 'tilebox'].includes(col.key);
+          return `<td class="${isMono ? 'mono' : ''}">${escapeHtml(String(value))}</td>`;
+        }).join('');
+        resultTableBody.appendChild(tr);
+      });
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `tab-${tabName}`);
+      });
+      if (tabName === 'map') {
+        setTimeout(() => map.invalidateSize(), 50);
+      }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    function updateRadiusLabels() {
+      radiusValue.textContent = radiusInput.value;
+      radiusValueSide.textContent = `${radiusInput.value} m`;
+    }
+
+    function setTokenState(mode, text) {
+      tokenDot.className = 'dot ' + (mode === 'good' ? 'good' : 'bad');
+      tokenState.textContent = text;
+    }
+
+    function isTokenValid() {
+      return !!state.token && Date.now() < state.tokenExpiresAt;
+    }
+
+    function updateTokenBadge() {
+      if (isTokenValid()) {
+        const mins = Math.max(0, Math.floor((state.tokenExpiresAt - Date.now()) / 60000));
+        setTokenState('good', `Token active (${mins} min left)`);
+      } else if (state.token) {
+        setTokenState('bad', 'Token expired');
+      } else {
+        setTokenState('bad', 'No token');
+      }
+    }
+
+    function updateWmtsControls() {
+      const enabled = isTokenValid();
+      wmtsToggle.disabled = !enabled;
+      if (!enabled) {
+        wmtsToggle.checked = false;
+        removeWmtsLayer();
+        wmtsStatus.textContent = 'Authenticate to enable the WMTS Latest layer toggle.';
+      } else if (!state.wmtsLayer) {
+        wmtsStatus.textContent = 'WMTS Latest is available. Toggle it on to overlay ortho imagery.';
+      }
+    }
+
+    function getActiveFetchMode() {
+      if (state.selectedPolygon) return 'Area (polygon)';
+      if (state.selectedPoint) return 'Center (point + radius)';
+      return 'None';
+    }
+
+    function refreshFetchModePreview() {
+      fetchModePreview.value = getActiveFetchMode();
+    }
+
+    function updateSidebarAreaWarning(area) {
+      if (!area || area <= MAX_AREA_WARNING_M2) {
+        areaWarning.style.display = 'none';
+        areaWarning.textContent = '';
+        return;
+      }
+      areaWarning.style.display = 'block';
+      areaWarning.textContent =
+        `Warning: Selected area is approximately ${Math.round(area).toLocaleString()} m², which may be too large for some area-based operations.`;
+    }
+
+    function updateMapAreaWarningBadge(area) {
+      if (!area || area <= MAX_AREA_WARNING_M2) {
+        mapAreaWarningBadge.style.display = 'none';
+        mapAreaWarningBadge.textContent = '';
+        return;
+      }
+      mapAreaWarningBadge.style.display = 'block';
+      mapAreaWarningBadge.textContent =
+        `Area too large: ${Math.round(area).toLocaleString()} m² (${(area / 10000).toFixed(2)} ha)`;
+    }
+
+    function clearAreaWarnings() {
+      areaWarning.style.display = 'none';
+      areaWarning.textContent = '';
+      mapAreaWarningBadge.style.display = 'none';
+      mapAreaWarningBadge.textContent = '';
+    }
+
+    function clearSearchFilters() {
+      el('startDateInput').value = '';
+      el('endDateInput').value = '';
+      radiusInput.value = 75;
+      updateRadiusLabels();
+      refreshGeometryPreview();
+      queryStatus.textContent = 'Search filters cleared.';
+    }
+
+    function clearResponseProps() {
+      document.querySelectorAll('.response-prop-toggle').forEach(toggle => {
+        toggle.checked = false;
+      });
+
+      if (state.currentResults && state.currentResults.length) {
+        renderDynamicTableHeader();
+        renderDynamicTableRows(state.currentResults);
+        renderResults({ captures: [] }); // temporary no-op, overridden below
+      }
+
+      queryStatus.textContent = 'Response properties cleared.';
+    }
+
+    function resetDefaultResponseProps() {
+      document.querySelectorAll('.response-prop-toggle').forEach(toggle => {
+        toggle.checked = DEFAULT_RESPONSE_PROPS.includes(toggle.value);
+      });
+    }
+
+    function resetAllFilters() {
+      clearSearchFilters();
+      resetDefaultResponseProps();
+
+      if (state.currentResults && state.currentResults.length) {
+        renderDynamicTableHeader();
+        renderDynamicTableRows(state.currentResults);
+      }
+
+      state.nextCaptureToken = null;
+      state.pageCount = 1;
+      updatePaginationControls();
+      queryStatus.textContent = 'All filters reset to defaults.';
+    }
+
+    function setPoint(lat, lng, fly = true) {
+      state.selectedPoint = { lat, lng };
+      state.selectedPolygon = null;
+      state.polygonAreaM2 = null;
+      clearAreaWarnings();
+
+      if (state.marker) map.removeLayer(state.marker);
+      state.marker = L.marker([lat, lng]).addTo(map);
+
+      el('latInput').value = lat;
+      el('lngInput').value = lng;
+
+      if (fly) map.flyTo([lat, lng], 18);
+      refreshGeometryPreview();
+    }
+
+    function calculatePolygonAreaM2FromLatLngs(latlngs) {
+      if (!(L.GeometryUtil && L.GeometryUtil.geodesicArea)) return null;
+      return Math.abs(L.GeometryUtil.geodesicArea(latlngs));
+    }
+
+    function calculatePolygonAreaM2(layer) {
+      try {
+        const latlngs = layer.getLatLngs && layer.getLatLngs();
+        if (!latlngs || !latlngs.length) return null;
+        const ring = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+        const area = calculatePolygonAreaM2FromLatLngs(ring);
+
+        console.log('Final polygon area debug', {
+          rawAreaValue: area,
+          assumedUnits: 'm²',
+          areaM2: area,
+          areaHa: area ? area / 10000 : null,
+          warningThresholdM2: MAX_AREA_WARNING_M2,
+          exceedsThreshold: !!area && area > MAX_AREA_WARNING_M2
+        });
+
+        return area;
+      } catch (err) {
+        console.log('Final polygon area debug error', err);
+        return null;
+      }
+    }
+
+    function setPolygonFromLayer(layer) {
+      const gj = layer.toGeoJSON();
+      state.selectedPolygon = gj.geometry;
+      state.selectedPoint = null;
+      state.polygonAreaM2 = calculatePolygonAreaM2(layer);
+      updateSidebarAreaWarning(state.polygonAreaM2);
+      updateMapAreaWarningBadge(state.polygonAreaM2);
+      refreshGeometryPreview();
+    }
+
+    function clearGeometry() {
+      state.selectedPolygon = null;
+      state.selectedPoint = null;
+      state.polygonAreaM2 = null;
+      clearAreaWarnings();
+
+      if (state.marker) {
+        map.removeLayer(state.marker);
+        state.marker = null;
+      }
+      drawnItems.clearLayers();
+      geometryType.value = 'None';
+      geometryPreview.value = '';
+      refreshFetchModePreview();
+      queryStatus.textContent = 'Selection cleared.';
+    }
+
+    function buildPointFeature(lat, lng) {
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [Number(lng), Number(lat)]
+        },
+        properties: null
+      };
+    }
+
+    function buildPolygonFeature(geometry) {
+      return {
+        type: 'Feature',
+        geometry,
+        properties: null
+      };
+    }
+
+    function refreshGeometryPreview() {
+      if (state.selectedPolygon) {
+        geometryType.value = 'Polygon';
+        geometryPreview.value = JSON.stringify({
+          polygon: {
+            geojson: {
+              value: JSON.stringify(buildPolygonFeature(state.selectedPolygon)),
+              epsg: 'EPSG:4326'
+            }
+          }
+        }, null, 2);
+      } else if (state.selectedPoint) {
+        geometryType.value = 'Point';
+        geometryPreview.value = JSON.stringify({
+          center: {
+            point: {
+              geojson: {
+                value: JSON.stringify(buildPointFeature(state.selectedPoint.lat, state.selectedPoint.lng)),
+                epsg: 'EPSG:4326'
+              }
+            },
+            radius_in_meters: Number(radiusInput.value || 75)
+          }
+        }, null, 2);
+      } else {
+        geometryType.value = 'None';
+        geometryPreview.value = '';
+      }
+      refreshFetchModePreview();
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function buildCaptureRequest() {
+      const startDate = el('startDateInput').value;
+      const endDate = el('endDateInput').value;
+
+      if (!startDate && !endDate && !state.nextCaptureToken) return null;
+      if (startDate && endDate && startDate > endDate) {
+        throw new Error('Start date cannot be after end date.');
+      }
+
+      const capture = { filter: {} };
+
+      if (startDate || endDate) {
+        capture.filter.date = {};
+        if (startDate) capture.filter.date.since = startDate;
+        if (endDate) capture.filter.date.until = endDate;
+      }
+
+      if (state.nextCaptureToken) {
+        capture.filter.next_capture_token = state.nextCaptureToken;
+      }
+
+      return capture;
+    }
+
+    function buildDiscoveryRequest() {
+      const apiBase = getApiBase();
+      const url = `${apiBase}/imagery/v3/discovery/rank/location`;
+      let body;
+
+      if (state.selectedPolygon) {
+        body = {
+          polygon: {
+            geojson: {
+              value: JSON.stringify(buildPolygonFeature(state.selectedPolygon)),
+              epsg: 'EPSG:4326'
+            }
+          }
+        };
+      } else if (state.selectedPoint) {
+        body = {
+          center: {
+            point: {
+              geojson: {
+                value: JSON.stringify(buildPointFeature(state.selectedPoint.lat, state.selectedPoint.lng)),
+                epsg: 'EPSG:4326'
+              }
+            },
+            radius_in_meters: Number(radiusInput.value || 75)
+          }
+        };
+      } else {
+        throw new Error('Select a point or polygon first.');
+      }
+
+      const captureRequest = buildCaptureRequest();
+      if (captureRequest) body.capture = captureRequest;
+
+      const responseProps = buildResponsePropsRequest();
+      if (responseProps) {
+        body.response_props = responseProps;
+      }
+
+      return { url, body };
+    }
+
+    function geometryToWktPolygon(geometry) {
+      const ring = geometry.coordinates[0];
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      const closedRing = (first[0] === last[0] && first[1] === last[1]) ? ring : [...ring, first];
+      const coords = closedRing.map(([lng, lat]) => `${lng} ${lat}`).join(', ');
+      return `POLYGON((${coords}))`;
+    }
+
+    function buildImageAtLocationUrl(imageUrn) {
+      const apiBase = getApiBase();
+      const url = new URL(`${apiBase}/imagery/v3/images/${encodeURIComponent(imageUrn)}/location`);
+
+      if (state.selectedPolygon) {
+        url.searchParams.set('area', geometryToWktPolygon(state.selectedPolygon));
+      } else if (state.selectedPoint) {
+        const lng = Number(state.selectedPoint.lng);
+        const lat = Number(state.selectedPoint.lat);
+        const radius = Math.round(Number(radiusInput.value || 75));
+
+        url.searchParams.set('center.x', String(lng));
+        url.searchParams.set('center.y', String(lat));
+        url.searchParams.set('center.radius', String(radius));
+      } else {
+        throw new Error('Select a point or polygon first.');
+      }
+
+      url.searchParams.set('epsg', 'EPSG:4326');
+      url.searchParams.set('format', el('imageFormat').value);
+
+      return {
+        url: url.toString(),
+        mode: state.selectedPolygon ? 'Area (polygon)' : 'Center (point + radius)'
+      };
+    }
+
+    function getApiBase() {
+      return el('environment').value === 'sandbox'
+        ? 'https://sandbox.apis.eagleview.com'
+        : 'https://apis.eagleview.com';
+    }
+
+    function getJsonContentType() {
+      return el('strictMode').value === 'strict'
+        ? 'application/json+strict'
+        : 'application/json';
+    }
+
+    async function fetchWmtsCapabilities() {
+      const capabilitiesUrl = `${getApiBase()}/imagery/wmts/v2/visual/capabilities.xml`;
+
+      const res = await fetch(capabilitiesUrl, {
+        headers: {
+          Authorization: `${state.tokenType} ${state.token}`
+        }
+      });
+
+      const text = await res.text();
+      responsePreview.textContent = text;
+
+      if (!res.ok) throw new Error(`WMTS capabilities request failed with status ${res.status}`);
+
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, 'application/xml');
+      const parserError = xml.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('Unable to parse WMTS capabilities XML.');
+      }
+      return xml;
+    }
+
+    function parseWmtsLatestLayer(xml) {
+      const layerNodes = Array.from(xml.getElementsByTagNameNS('*', 'Layer'));
+
+      const latestLayer = layerNodes.find(layer => {
+        const idNode = layer.getElementsByTagNameNS('*', 'Identifier')[0];
+        return idNode && idNode.textContent.trim() === 'Latest';
+      });
+
+      if (!latestLayer) {
+        throw new Error('Latest WMTS layer not found in capabilities.');
+      }
+
+      const identifier =
+        latestLayer.getElementsByTagNameNS('*', 'Identifier')[0]?.textContent?.trim();
+
+      const tileMatrixSetLink =
+        latestLayer.getElementsByTagNameNS('*', 'TileMatrixSetLink')[0];
+
+      const linkedTileMatrixSet =
+        tileMatrixSetLink
+          ?.getElementsByTagNameNS('*', 'TileMatrixSet')[0]
+          ?.textContent
+          ?.trim();
+
+      if (!linkedTileMatrixSet) {
+        throw new Error(`No TileMatrixSetLink found for WMTS layer "${identifier}".`);
+      }
+
+      const resourceUrl = Array.from(
+        latestLayer.getElementsByTagNameNS('*', 'ResourceURL')
+      ).find(node => node.getAttribute('resourceType') === 'tile');
+
+      const template = resourceUrl?.getAttribute('template') || '';
+
+      return {
+        identifier,
+        tileMatrixSet: linkedTileMatrixSet,
+        template
+      };
+    }
+
+    function createAuthenticatedWmtsLayer(meta) {
+      const fallback = `${getApiBase()}/imagery/wmts/v2/visual/tile/${encodeURIComponent(meta.identifier)}/default/${encodeURIComponent(meta.tileMatrixSet)}/{z}/{x}/{y}.png`;
+
+      const rawTemplate = meta.template
+        ? meta.template
+            .replace('{Layer}', meta.identifier)
+            .replace('{Style}', 'default')
+            .replace('{TileMatrixSet}', meta.tileMatrixSet)
+            .replace('{TileMatrix}', '{z}')
+            .replace('{TileRow}', '{y}')
+            .replace('{TileCol}', '{x}')
+            .replace(/\.jpe?g(\?|$)/i, '.png$1')
+        : fallback;
+
+      const AuthenticatedGridLayer = L.GridLayer.extend({
+        createTile: function(coords, done) {
+          const tile = document.createElement('img');
+          tile.alt = '';
+          const tileUrl = rawTemplate
+            .replace('{z}', coords.z)
+            .replace('{x}', coords.x)
+            .replace('{y}', coords.y);
+
+          fetch(tileUrl, {
+            headers: {
+              Authorization: `${state.tokenType} ${state.token}`
+            }
+          })
+            .then(async res => {
+              if (!res.ok) throw new Error(`WMTS tile fetch failed: ${res.status}`);
+              return await res.blob();
+            })
+            .then(blob => {
+              const objectUrl = URL.createObjectURL(blob);
+              tile.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                done(null, tile);
+              };
+              tile.onerror = () => done(new Error('Tile image load failed'), tile);
+              tile.src = objectUrl;
+            })
+            .catch(err => done(err, tile));
+
+          return tile;
+        }
+      });
+
+      return new AuthenticatedGridLayer({ tileSize: 256, opacity: 0.85 });
+    }
+
+    function removeWmtsLayer() {
+      if (state.wmtsLayer && map.hasLayer(state.wmtsLayer)) {
+        map.removeLayer(state.wmtsLayer);
+      }
+      state.wmtsLayer = null;
+      state.wmtsMeta = null;
+    }
+
+    async function toggleWmtsLatest(enabled) {
+      if (!enabled) {
+        removeWmtsLayer();
+        wmtsStatus.textContent = 'WMTS Latest layer hidden.';
+        return;
+      }
+
+      if (!isTokenValid()) {
+        wmtsToggle.checked = false;
+        wmtsStatus.textContent = 'Authenticate first to use the WMTS Latest layer.';
+        return;
+      }
+
+      try {
+        wmtsStatus.textContent = 'Loading WMTS capabilities...';
+        const xml = await fetchWmtsCapabilities();
+        const meta = parseWmtsLatestLayer(xml);
+        removeWmtsLayer();
+        state.wmtsMeta = meta;
+        state.wmtsLayer = createAuthenticatedWmtsLayer(meta);
+        state.wmtsLayer.addTo(map);
+        wmtsStatus.textContent = `WMTS layer enabled: ${meta.identifier} (${meta.tileMatrixSet}) as PNG`;
+      } catch (err) {
+        wmtsToggle.checked = false;
+        wmtsStatus.textContent = `WMTS error: ${err.message}`;
+      }
+    }
+
+    function normalizeResults(raw) {
+      if (!Array.isArray(raw?.captures)) return [];
+
+      const flattened = [];
+
+      raw.captures.forEach(captureWrapper => {
+        const capture = captureWrapper.capture || {};
+        const captureUrn = capture.urn || '';
+        const captureStartDate = capture.start_date || '';
+        const captureEndDate = capture.end_date || '';
+        const captureLabels = Array.isArray(capture.labels) ? capture.labels.join(', ') : '';
+        const displayDate = captureStartDate && captureEndDate && captureStartDate !== captureEndDate
+          ? `${captureStartDate} → ${captureEndDate}`
+          : (captureStartDate || captureEndDate || 'n/a');
+
+        const makeRow = (img, type, direction = '') => {
+          const typeTitle = formatImageTitle({ type, direction });
+
+          return {
+            urn: img.urn || '',
+            type,
+            typeTitle,
+            date: displayDate,
+            direction,
+            directionDisplay: direction ? formatDirection(direction) : '—',
+            captureUrn,
+            captureStartDate,
+            captureEndDate,
+            captureLabels,
+            firstPublishedTime: img.first_published_time || '',
+            composite: img.composite === true ? 'Yes' : img.composite === false ? 'No' : '',
+            shotTime: img.shot_time || '',
+            gsdRaw: img.calculated_gsd || null,
+            zoomRange: img.zoom_range
+              ? `${img.zoom_range.minimum_zoom_level}–${img.zoom_range.maximum_zoom_level}`
+              : '',
+            groundFootprint: img.ground_footprint?.wkt?.value || '',
+            lookAtAzimuth: img.look_at?.azimuth ?? '',
+            lookAtElevation: img.look_at?.elevation ?? '',
+            tilebox: img.resources?.tilebox
+              ? `z${img.resources.tilebox.z} T:${img.resources.tilebox.top} B:${img.resources.tilebox.bottom} L:${img.resources.tilebox.left} R:${img.resources.tilebox.right}`
+              : '',
+            estimatedRequestedLocation: img.resources?.estimated_requested_location
+              ? `z${img.resources.estimated_requested_location.z} (${(img.resources.estimated_requested_location.coords || []).length} pts)`
+              : '',
+            source: 'Eagleview',
+            raw: {
+              capture,
+              image: img,
+              group: type === 'ortho' ? 'orthos' : 'obliques',
+              direction
+            }
+          };
+        };
+
+        (captureWrapper.orthos?.images || []).forEach(img => {
+          flattened.push(makeRow(img, 'ortho'));
+        });
+
+        ['north', 'east', 'south', 'west'].forEach(dir => {
+          (captureWrapper.obliques?.[dir]?.images || []).forEach(img => {
+            flattened.push(makeRow(img, 'oblique', dir));
+          });
+        });
+      });
+
+      return flattened.map((item, idx) => ({
+        ...item,
+        idx: idx + 1
+      }));
+    }
+
+    function setPreviewIdentity(item) {
+      const title = formatImageTitle(item);
+      el('previewTitle').textContent = title;
+      el('previewTitleBadge').textContent = title;
+      el('previewViewType').textContent = item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : '—';
+      el('previewDirection').textContent = item.direction ? formatDirection(item.direction) : '—';
+    }
+
+    async function fetchImageAtLocation(item) {
+      if (!isTokenValid()) {
+        queryStatus.textContent = 'A valid token is required first.';
+        return;
+      }
+
+      try {
+        const imageUrn = item.urn;
+        const fetchRequest = buildImageAtLocationUrl(imageUrn);
+        requestPreview.textContent =
+`GET ${fetchRequest.url}
+Authorization: ${state.tokenType} ${state.token.slice(0, 18)}...`;
+
+        const res = await fetch(fetchRequest.url, {
+          headers: {
+            Authorization: `${state.tokenType} ${state.token}`
+          }
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(errText || `Image fetch failed with status ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        if (state.previewObjectUrl) URL.revokeObjectURL(state.previewObjectUrl);
+        state.previewObjectUrl = URL.createObjectURL(blob);
+
+        el('imagePreviewWrap').style.display = 'grid';
+        el('previewEmptyState').style.display = 'none';
+        el('previewUrn').textContent = imageUrn;
+        el('previewMode').textContent = fetchRequest.mode;
+        el('previewUrl').textContent = fetchRequest.url;
+        setPreviewIdentity(item);
+
+        const img = el('imagePreview');
+        img.src = state.previewObjectUrl;
+        img.style.display = 'block';
+
+        switchTab('preview');
+        queryStatus.textContent = `Image fetched successfully using ${fetchRequest.mode}.`;
+      } catch (err) {
+        queryStatus.textContent = `Fetch image error: ${err.message}`;
+      }
+    }
+
+    function renderResults(raw, sample = false) {
+      const normalized = normalizeResults(raw);
+      state.currentResults = normalized;
+      state.nextCaptureToken = raw?.next_capture_token || null;
+      updatePaginationControls();
+
+      resultCountPill.textContent = `${normalized.length} result${normalized.length === 1 ? '' : 's'}${sample ? ' · sample' : ''}`;
+
+      resultsEl.innerHTML = '';
+      resultTableBody.innerHTML = '';
+
+      if (!normalized.length) {
+        resultsEl.innerHTML = `<div class="card"><h3>No results</h3><div class="small">No imagery records found.</div></div>`;
+        resultTableWrap.style.display = 'none';
+        return;
+      }
+
+      normalized.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>${escapeHtml(item.typeTitle)}</strong>
+            <span class="pill">#${item.idx}</span>
+          </div>
+          <div class="kv">
+            <div>URN</div><div class="mono">${escapeHtml(item.urn)}</div>
+            <div>Date</div><div>${escapeHtml(item.date)}</div>
+            <div>Direction</div><div>${escapeHtml(item.directionDisplay)}</div>
+            <div>GSD</div><div>${escapeHtml(formatGsd(item.gsdRaw))}</div>
+            <div>Capture URN</div><div class="mono">${escapeHtml(item.captureUrn || '—')}</div>
+            <div>Source</div><div>${escapeHtml(item.source)}</div>
+          </div>
+          <div class="btn-row">
+            <button class="primary fetch-image-btn">Fetch Image at Location</button>
+          </div>
+        `;
+        resultsEl.appendChild(card);
+
+        card.querySelector('.fetch-image-btn').addEventListener('click', () => {
+          fetchImageAtLocation(item);
+        });
+      });
+
+      renderDynamicTableHeader();
+      renderDynamicTableRows(normalized);
+      resultTableWrap.style.display = 'block';
+    }
+
+    async function getToken() {
+      const clientId = el('clientId').value.trim();
+      const clientSecret = el('clientSecret').value.trim();
+
+      if (!clientId || !clientSecret) {
+        authStatus.textContent = 'Client ID and Client Secret are required.';
+        return;
+      }
+
+      authStatus.textContent = 'Requesting token...';
+
+      try {
+        const basic = btoa(`${clientId}:${clientSecret}`);
+        const res = await fetch(tokenEndpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${basic}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({ grant_type: 'client_credentials' })
+        });
+
+        const json = await res.json().catch(() => ({}));
+        responsePreview.textContent = JSON.stringify(json, null, 2);
+
+        if (!res.ok || !json.access_token) {
+          throw new Error(json.error_description || json.error || `Token request failed with status ${res.status}`);
+        }
+
+        state.token = json.access_token;
+        state.tokenType = json.token_type || 'Bearer';
+        state.tokenExpiresAt = Date.now() + ((json.expires_in || 3600) * 1000);
+
+        authStatus.textContent = 'Token acquired successfully.';
+        authAccordion.removeAttribute('open');
+        updateTokenBadge();
+        updateWmtsControls();
+      } catch (err) {
+        authStatus.textContent = `Token error: ${err.message}`;
+      }
+    }
+
+    async function runDiscovery(resetPaging = true) {
+      if (!isTokenValid()) {
+        queryStatus.textContent = 'A valid token is required first.';
+        return;
+      }
+
+      try {
+        if (resetPaging) {
+          state.nextCaptureToken = null;
+          state.pageCount = 1;
+        }
+
+        const { url, body } = buildDiscoveryRequest();
+        requestPreview.textContent =
+`POST ${url}
+Authorization: ${state.tokenType} ${state.token.slice(0,18)}...
+Content-Type: ${getJsonContentType()}
+
+${JSON.stringify(body, null, 2)}`;
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `${state.tokenType} ${state.token}`,
+            'Content-Type': getJsonContentType()
+          },
+          body: JSON.stringify(body)
+        });
+
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = { raw: text }; }
+        responsePreview.textContent = JSON.stringify(json, null, 2);
+
+        if (!res.ok) {
+          throw new Error(json.message || json.error || `Discovery request failed with status ${res.status}`);
+        }
+
+        renderResults(json, false);
+        switchTab('cards');
+        queryStatus.textContent = `Imagery search complete. Parsed ${normalizeResults(json).length} image result(s).`;
+      } catch (err) {
+        queryStatus.textContent = `Search error: ${err.message}`;
+      }
+    }
+
+    async function nextPage() {
+      if (!state.nextCaptureToken) return;
+      try {
+        state.pageCount += 1;
+        await runDiscovery(false);
+      } catch (err) {
+        state.pageCount = Math.max(1, state.pageCount - 1);
+        updatePaginationControls();
+      }
+    }
+
+    async function geocodeSearch(query) {
+      if (!query.trim()) return;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (!data?.length) {
+          queryStatus.textContent = 'No matching location found.';
+          return;
+        }
+        const item = data[0];
+        setPoint(Number(item.lat), Number(item.lon), true);
+        switchTab('map');
+        queryStatus.textContent = `Map centered on: ${item.display_name}`;
+      } catch (err) {
+        queryStatus.textContent = `Search failed: ${err.message}`;
+      }
+    }
+
+    function updatePaginationControls() {
+      if (state.nextCaptureToken) {
+        nextPageBtn.style.display = 'inline-block';
+        nextPageBtn.disabled = false;
+        paginationMeta.textContent = `Page ${state.pageCount}. More captures are available.`;
+      } else {
+        nextPageBtn.style.display = 'none';
+        paginationMeta.textContent = `Page ${state.pageCount}. No more capture pages available.`;
+      }
+    }
+
+    const map = L.map('map').setView([39.5, -98.35], 4);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+      position: 'topleft',
+      draw: {
+        polyline: false,
+        rectangle: true,
+        circle: false,
+        circlemarker: false,
+        marker: false,
+        polygon: {
+          allowIntersection: false,
+          showArea: true
+        }
+      },
+      edit: {
+        featureGroup: drawnItems
+      }
+    });
+    map.addControl(drawControl);
+
+    map.on('click', (e) => {
+      drawnItems.clearLayers();
+      setPoint(e.latlng.lat, e.latlng.lng, false);
+      queryStatus.textContent = 'Point selected from map click.';
+    });
+
+    map.on(L.Draw.Event.CREATED, (event) => {
+      drawnItems.clearLayers();
+      const layer = event.layer;
+      drawnItems.addLayer(layer);
+      if (state.marker) {
+        map.removeLayer(state.marker);
+        state.marker = null;
+      }
+      setPolygonFromLayer(layer);
+      queryStatus.textContent = 'Polygon/rectangle selected. Area fetch will be used automatically.';
+    });
+
+    map.on(L.Draw.Event.EDITED, () => {
+      const layers = drawnItems.getLayers();
+      if (layers.length) {
+        setPolygonFromLayer(layers[0]);
+        queryStatus.textContent = 'Geometry updated.';
+      }
+    });
+
+    map.on(L.Draw.Event.DELETED, () => {
+      state.selectedPolygon = null;
+      state.polygonAreaM2 = null;
+      clearAreaWarnings();
+      refreshGeometryPreview();
+      queryStatus.textContent = 'Drawn geometry deleted.';
+    });
+
+    map.on('draw:drawvertex', function (e) {
+      const markers = e.layers?.getLayers ? e.layers.getLayers() : [];
+      if (!markers || markers.length < 3) {
+        updateMapAreaWarningBadge(null);
+        return;
+      }
+
+      const latlngs = markers
+        .map(m => m.getLatLng ? m.getLatLng() : null)
+        .filter(Boolean);
+
+      if (latlngs.length < 3) {
+        updateMapAreaWarningBadge(null);
+        return;
+      }
+
+      const area = calculatePolygonAreaM2FromLatLngs(latlngs);
+
+      console.log('Polygon draw area debug', {
+        rawAreaValue: area,
+        assumedUnits: 'm²',
+        areaM2: area,
+        areaHa: area ? area / 10000 : null,
+        warningThresholdM2: MAX_AREA_WARNING_M2,
+        exceedsThreshold: !!area && area > MAX_AREA_WARNING_M2
+      });
+
+      updateSidebarAreaWarning(area);
+      updateMapAreaWarningBadge(area);
+    });
+
+    map.on('draw:drawstop', () => {
+      if (!state.selectedPolygon) updateMapAreaWarningBadge(null);
+    });
+
+    el('getTokenBtn').addEventListener('click', getToken);
+    el('clearTokenBtn').addEventListener('click', () => {
+      state.token = null;
+      state.tokenExpiresAt = 0;
+      authStatus.textContent = 'Token cleared.';
+      updateTokenBadge();
+      updateWmtsControls();
+    });
+
+    el('geocodeBtn').addEventListener('click', () => {
+      geocodeSearch(el('searchText').value);
+      switchTab('map');
+    });
+
+    el('quickSearchBtn').addEventListener('click', () => {
+      geocodeSearch(el('quickSearch').value);
+      switchTab('map');
+    });
+
+    el('quickSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        geocodeSearch(e.target.value);
+        switchTab('map');
+      }
+    });
+
+    el('searchText').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        geocodeSearch(e.target.value);
+        switchTab('map');
+      }
+    });
+
+    el('usePinBtn').addEventListener('click', () => {
+      const lat = Number(el('latInput').value);
+      const lng = Number(el('lngInput').value);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        drawnItems.clearLayers();
+        setPoint(lat, lng, true);
+        switchTab('map');
+        queryStatus.textContent = 'Point set from coordinates.';
+      } else {
+        queryStatus.textContent = 'Enter valid latitude and longitude values.';
+      }
+    });
+
+    el('clearSearchFiltersBtn').addEventListener('click', clearSearchFilters);
+    el('clearResponsePropsBtn').addEventListener('click', () => {
+      clearResponseProps();
+      renderResults({ captures: state.currentResults.map(r => r.raw).filter(Boolean) }, false);
+    });
+    el('resetAllBtn').addEventListener('click', resetAllFilters);
+    el('clearShapesBtn').addEventListener('click', clearGeometry);
+    el('discoverBtn').addEventListener('click', () => runDiscovery(true));
+    nextPageBtn.addEventListener('click', nextPage);
+
+    el('fitGeometryBtn').addEventListener('click', () => {
+      switchTab('map');
+      setTimeout(() => {
+        if (state.selectedPolygon) {
+          const layer = drawnItems.getLayers()[0];
+          if (layer) map.fitBounds(layer.getBounds(), { padding: [20,20] });
+        } else if (state.selectedPoint) {
+          map.flyTo([state.selectedPoint.lat, state.selectedPoint.lng], 18);
+        }
+      }, 60);
+    });
+
+    el('demoDataBtn').addEventListener('click', () => {
+      const sample = {
+        captures: [{
+          capture: {
+            urn: 'urn:eagleview.com:v1:spatial-data:capture:fixed-wing-penta:sample',
+            start_date: '2026-04-04',
+            end_date: '2026-04-29',
+            labels: ['sample-label']
+          },
+          obliques: {
+            east: {
+              images: [{
+                urn: 'urn:eagleview.com:v4:sample:east',
+                first_published_time: '2026-06-02T20:00:17Z',
+                composite: true,
+                shot_time: '2026-04-16T16:07:25Z',
+                calculated_gsd: { value: 0.031564925, units: 'UNITS_METERS' },
+                zoom_range: { minimum_zoom_level: 0, maximum_zoom_level: 7 },
+                resources: {
+                  tilebox: { z: 7, top: 69, bottom: 74, left: 77, right: 83 },
+                  estimated_requested_location: { z: 7, coords: [{x:'1',y:'1'},{x:'2',y:'2'}] }
+                },
+                look_at: { azimuth: 83.0516, elevation: 45.745968 },
+                ground_footprint: { wkt: { value: 'MULTIPOLYGON(((...)))' } }
+              }]
+            }
+          },
+          orthos: {
+            images: [{
+              urn: 'urn:eagleview.com:v4:sample:ortho',
+              first_published_time: '2026-05-27T19:32:01Z',
+              composite: true,
+              shot_time: '2026-03-19T00:00:00Z',
+              calculated_gsd: { value: 0.014049339, units: 'UNITS_METERS' },
+              zoom_range: { minimum_zoom_level: 8, maximum_zoom_level: 23 }
+            }]
+          }
+        }],
+        next_capture_token: 'sample-next-capture-token'
+      };
+      responsePreview.textContent = JSON.stringify(sample, null, 2);
+      renderResults(sample, true);
+      switchTab('cards');
+    });
+
+    radiusInput.addEventListener('input', () => {
+      updateRadiusLabels();
+      refreshGeometryPreview();
+    });
+
+    wmtsToggle.addEventListener('change', (e) => {
+      toggleWmtsLatest(e.target.checked);
+    });
+
+    gsdDisplayUnit.addEventListener('change', () => {
+      if (state.currentResults && state.currentResults.length) {
+        renderResults(
+          {
+            captures: [],
+            next_capture_token: state.nextCaptureToken
+          },
+          false
+        );
+        // Re-render from current normalized cache manually
+        const current = state.currentResults;
+        resultsEl.innerHTML = '';
+        current.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong>${escapeHtml(item.typeTitle)}</strong>
+              <span class="pill">#${item.idx}</span>
+            </div>
+            <div class="kv">
+              <div>URN</div><div class="mono">${escapeHtml(item.urn)}</div>
+              <div>Date</div><div>${escapeHtml(item.date)}</div>
+              <div>Direction</div><div>${escapeHtml(item.directionDisplay)}</div>
+              <div>GSD</div><div>${escapeHtml(formatGsd(item.gsdRaw))}</div>
+              <div>Capture URN</div><div class="mono">${escapeHtml(item.captureUrn || '—')}</div>
+              <div>Source</div><div>${escapeHtml(item.source)}</div>
+            </div>
+            <div class="btn-row">
+              <button class="primary fetch-image-btn">Fetch Image at Location</button>
+            </div>
+          `;
+          resultsEl.appendChild(card);
+          card.querySelector('.fetch-image-btn').addEventListener('click', () => {
+            fetchImageAtLocation(item);
+          });
+        });
+        renderDynamicTableHeader();
+        renderDynamicTableRows(current);
+        resultTableWrap.style.display = 'block';
+      }
+    });
+
+    document.querySelectorAll('.response-prop-toggle').forEach(toggle => {
+      toggle.addEventListener('change', () => {
+        if (state.currentResults && state.currentResults.length) {
+          renderDynamicTableHeader();
+          renderDynamicTableRows(state.currentResults);
+        }
+      });
+    });
+
+    updateRadiusLabels();
+    resetAllFilters();
+    updateTokenBadge();
+    updateWmtsControls();
+    updatePaginationControls();
+    refreshFetchModePreview();
+    renderResults([], false);
+    setTimeout(() => map.invalidateSize(), 100);
+  </script>
+</body>
+</html>
